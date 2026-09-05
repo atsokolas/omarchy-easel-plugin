@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "atsokolas.easel",
+  "name": "Easel",
+  "version": "1.0.0",
+  "author": "atsokolas",
+  "license": "MIT",
+  "description": "A different public-domain artwork on the Omarchy bar every day.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Easel",
+    "description": "Today's artwork as a tiny framed canvas; the full picture and its wall label in the panel.",
+    "category": "Info",
+    "aliases": [
+      "easel",
+      "art",
+      "artwork",
+      "painting",
+      "gallery",
+      "museum"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "notify": true,
+      "showTitle": false
+    },
+    "schema": [
+      {
+        "key": "notify",
+        "type": "boolean",
+        "label": "Announce the new piece each day",
+        "defaultValue": true
+      },
+      {
+        "key": "showTitle",
+        "type": "boolean",
+        "label": "Show the artist on the bar",
+        "defaultValue": false
+      }
+    ]
+  }
+}
