@@ -24,10 +24,12 @@ Item {
   property bool loading: false
   property string error: ""
 
-  property bool wallpaperBusy: false
-  property string wallpaperError: ""
+  property bool hanging: false
+  property string hangError: ""
 
   readonly property bool notify: setting("notify", true) === true
+  // Hanging a picture recolours the desktop to match it, unless asked not to.
+  readonly property bool recolor: setting("recolor", true) === true
   readonly property var selection: Model.selectionForDay(dateKey, offset)
   readonly property string caption: Model.caption(art)
   readonly property string subtitle: Model.subtitle(art)
@@ -39,8 +41,8 @@ Item {
   property string _searchOutput: ""
   property string _imagePending: ""
   property string _imageUrlPending: ""
-  property string _wallPending: ""
-  property string _wallUrlPending: ""
+  property string _hangPending: ""
+  property string _hangUrlPending: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -120,23 +122,27 @@ Item {
     Quickshell.execDetached(Model.openCommand(art.id))
   }
 
-  // The bar and panel show an 843px render; a background wants the big one,
-  // so this fetches its own copy before handing the path to Omarchy. A work
-  // whose source is smaller than the box arrives at its own size rather than
-  // failing, so every piece can be hung.
-  function setWallpaper() {
-    if (!art || wallpaperBusy) return
-    wallpaperBusy = true
-    wallpaperError = ""
-    _wallPending = Model.cachePath(home, art.imageId, Model.WALLPAPER_BOX)
-    _wallUrlPending = Model.imageUrl(art.imageId, Model.WALLPAPER_BOX)
-    wallCheckProcess.command = Model.existsCommand(_wallPending)
-    wallCheckProcess.running = true
+  // Hang the picture on the desktop. The bar and panel show an 843px render;
+  // a background wants the big one, so this fetches its own copy first. A
+  // work whose source is smaller than the box arrives at its own size rather
+  // than failing, so every piece can be hung.
+  function hang() {
+    if (!art || hanging) return
+    hanging = true
+    hangError = ""
+    _hangPending = Model.cachePath(home, art.imageId, Model.WALLPAPER_BOX)
+    _hangUrlPending = Model.imageUrl(art.imageId, Model.WALLPAPER_BOX)
+    hangCheckProcess.command = Model.existsCommand(_hangPending)
+    hangCheckProcess.running = true
   }
 
-  function applyWallpaper() {
-    wallApplyProcess.command = Model.wallpaperCommand(_wallPending)
-    wallApplyProcess.running = true
+  // With the full-size copy on disk: either dress the whole desktop in the
+  // painting's colours, or just put it on the wall.
+  function applyHang() {
+    hangApplyProcess.command = recolor
+      ? Model.hangCommand(home, art, _hangPending)
+      : Model.wallpaperCommand(_hangPending)
+    hangApplyProcess.running = true
   }
 
   Process {
@@ -182,34 +188,34 @@ Item {
   }
 
   Process {
-    id: wallCheckProcess
+    id: hangCheckProcess
     onExited: function(code) {
       if (code === 0) {
-        root.applyWallpaper()
+        root.applyHang()
         return
       }
-      wallFetchProcess.command = Model.curlImageCommand(root._wallUrlPending, root._wallPending, 90)
-      wallFetchProcess.running = true
+      hangFetchProcess.command = Model.curlImageCommand(root._hangUrlPending, root._hangPending, 90)
+      hangFetchProcess.running = true
     }
   }
 
   Process {
-    id: wallFetchProcess
+    id: hangFetchProcess
     onExited: function(code) {
       if (code !== 0) {
-        root.wallpaperBusy = false
-        root.wallpaperError = "Could not fetch a full-size copy"
+        root.hanging = false
+        root.hangError = "Could not fetch a full-size copy"
         return
       }
-      root.applyWallpaper()
+      root.applyHang()
     }
   }
 
   Process {
-    id: wallApplyProcess
+    id: hangApplyProcess
     onExited: function(code) {
-      root.wallpaperBusy = false
-      root.wallpaperError = code === 0 ? "" : "Could not set the background"
+      root.hanging = false
+      root.hangError = code === 0 ? "" : "Could not hang the picture"
     }
   }
 
@@ -222,15 +228,16 @@ Item {
     onTriggered: if (root.active && !root.ready) root.load()
   }
 
-  // The day turning over is the whole point of the plugin, so it is checked
-  // on a plain wall-clock tick rather than trusting a 24h interval to stay
-  // aligned across a suspend.
+  // Wakes on the minute, so the day turns over within a second of midnight —
+  // in step with the other daily widgets — and a picture that never arrived
+  // gets another chance. A wall-clock tick rather than a 24h interval, so it
+  // stays aligned across a suspend.
   Timer {
-    interval: 60000
     running: root.active
-    repeat: true
-    triggeredOnStart: true
+    interval: 60000 - Date.now() % 60000
     onTriggered: {
+      interval = 60000 - Date.now() % 60000
+      restart()
       var today = Model.dateKeyFromDate(new Date())
       if (today === root.dateKey) {
         if (!root.ready && !root.loading && root.error === "") root.load()

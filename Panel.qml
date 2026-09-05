@@ -92,7 +92,7 @@ Panel {
   function handleTextKey(key) {
     var k = String(key || "").toLowerCase()
     if (k === "n") service.shuffle()
-    else if (k === "w") service.setWallpaper()
+    else if (k === "h") service.hang()
     else if (k === "o") service.open()
     else if (k === "r") service.refresh()
   }
@@ -331,7 +331,7 @@ Panel {
           }
 
           Button {
-            text: service.wallpaperBusy ? "HANGING…" : "BACKGROUND"
+            text: service.hanging ? "HANGING…" : "HANG"
             foreground: root.foreground
             background: "transparent"
             accent: Color.accent
@@ -339,8 +339,8 @@ Panel {
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
             verticalPadding: Style.space(1)
-            enabled: root.art !== null && !service.wallpaperBusy
-            onClicked: service.setWallpaper()
+            enabled: root.art !== null && !service.hanging
+            onClicked: service.hang()
           }
 
           Button {
@@ -361,10 +361,10 @@ Panel {
 
         Text {
           Layout.fillWidth: true
-          text: service.wallpaperError !== ""
-            ? service.wallpaperError
+          text: service.hangError !== ""
+            ? service.hangError
             : Model.statusLine({ error: service.error, loading: service.loading, art: root.art })
-          color: service.wallpaperError !== "" || service.error !== "" ? Color.urgent : root.dim
+          color: service.hangError !== "" || service.error !== "" ? Color.urgent : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight

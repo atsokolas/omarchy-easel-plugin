@@ -51,17 +51,20 @@ BarWidget {
     if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
   }
 
-  // A new picture is hung rather than swapped: the old canvas fades out, the
-  // new one settles in. Driven off imagePath so a refresh that lands on the
-  // same artwork stays still.
-  property real hang: 1
+  // A new picture is hung, not swapped: the old canvas lifts off the wall,
+  // then the new one drops onto its nail and settles. `shownPath` trails
+  // `imagePath` by the take-down so the old picture is still there to leave.
+  // Driven off imagePath, so a refresh that lands on the same work stays still.
+  property string shownPath: ""
+  property real hang: 0   // 1 on the wall, 0 lifted clear of it
 
-  onImagePathChanged: if (imagePath !== "") hangAnimation.restart()
+  onImagePathChanged: if (imagePath !== "" && imagePath !== shownPath) rehang.restart()
 
   SequentialAnimation {
-    id: hangAnimation
-    NumberAnimation { target: root; property: "hang"; to: 0; duration: 120; easing.type: Easing.InQuad }
-    NumberAnimation { target: root; property: "hang"; to: 1; duration: 420; easing.type: Easing.OutBack }
+    id: rehang
+    NumberAnimation { target: root; property: "hang"; to: 0; duration: 160; easing.type: Easing.InQuad }
+    ScriptAction { script: root.shownPath = root.imagePath }
+    NumberAnimation { target: root; property: "hang"; to: 1; duration: 460; easing.type: Easing.OutBack }
   }
 
   implicitWidth: button.implicitWidth
@@ -79,9 +82,9 @@ BarWidget {
     function toggle(): void { root.togglePanel() }
     function refresh(): string { root.refresh(); return "ok" }
     function shuffle(): string { root.shuffle(); return "ok" }
-    function wallpaper(): string {
+    function hang(): string {
       if (!root.service) return "no service"
-      root.service.setWallpaper()
+      root.service.hang()
       return "ok"
     }
     // The bar is a layer surface, so what is hanging cannot be read off a
@@ -98,6 +101,7 @@ BarWidget {
         error: s.error,
         image: s.imagePath,
         artwork: s.art ? Model.caption(s.art) : "",
+        color: s.art ? s.art.color : null,
         url: s.art ? Model.pageUrl(s.art.id) : ""
       })
     }
@@ -151,7 +155,8 @@ BarWidget {
       Rectangle {
         id: frame
         x: root.vertical ? (parent.width - width) / 2 : (parent.width - content.contentWidth) / 2
-        anchors.verticalCenter: parent.verticalCenter
+        // Lifted clear of the bar while off the wall.
+        y: (parent.height - height) / 2 - (1 - root.hang) * height * 0.9
         width: content.frameWidth
         height: content.frameHeight
         radius: Math.min(2, Style.cornerRadius)
@@ -159,34 +164,40 @@ BarWidget {
         border.width: 1
         border.color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b,
                               root.opened ? 0.85 : 0.5)
+        opacity: root.shownPath === "" ? 1 : root.hang
         scale: 0.86 + root.hang * 0.14
-        transformOrigin: Item.Center
 
+        // It hangs from a nail: nudge it and it swings, then settles.
+        transformOrigin: Item.Top
+        rotation: hover.hovered ? 3 : 0
+        Behavior on rotation { SpringAnimation { spring: 3.5; damping: 0.14 } }
         Behavior on border.color { ColorAnimation { duration: 160 } }
+
+        HoverHandler { id: hover }
 
         Image {
           id: canvas
           anchors.fill: parent
           anchors.margins: 1
-          source: root.imagePath === "" ? "" : "file://" + root.imagePath
+          source: root.shownPath === "" ? "" : "file://" + root.shownPath
           fillMode: Image.PreserveAspectCrop
           sourceSize.height: 48
           asynchronous: true
           cache: true
           smooth: true
           clip: true
-          opacity: status === Image.Ready ? root.hang : 0
+          opacity: status === Image.Ready ? 1 : 0
 
           Behavior on opacity { NumberAnimation { duration: 220 } }
         }
 
         // Empty stretcher while the collection is still being visited.
         SequentialAnimation on opacity {
-          running: root.loading && root.imagePath === ""
+          running: root.loading && root.shownPath === ""
           loops: Animation.Infinite
           NumberAnimation { from: 1; to: 0.45; duration: 900; easing.type: Easing.InOutSine }
           NumberAnimation { from: 0.45; to: 1; duration: 900; easing.type: Easing.InOutSine }
-          onRunningChanged: if (!running) frame.opacity = 1
+          onRunningChanged: if (!running) frame.opacity = Qt.binding(function() { return root.shownPath === "" ? 1 : root.hang })
         }
       }
 

@@ -42,7 +42,7 @@ var ROOMS = [
 var FIELDS = [
   "id", "title", "artist_title", "artist_display", "date_display",
   "medium_display", "dimensions", "department_title", "place_of_origin",
-  "artwork_type_title", "image_id", "thumbnail"
+  "artwork_type_title", "image_id", "thumbnail", "color"
 ]
 
 // Everything here reproduces well at panel size. A batch with none of them
@@ -157,6 +157,7 @@ function normalizeArtwork(row) {
   var imageId = text(row.image_id)
   if (imageId === "") return null
   var thumb = row.thumbnail && typeof row.thumbnail === "object" ? row.thumbnail : {}
+  var color = row.color && typeof row.color === "object" ? row.color : null
   return {
     id: String(row.id || ""),
     title: text(row.title) || "Untitled",
@@ -172,7 +173,12 @@ function normalizeArtwork(row) {
     altText: text(thumb.alt_text),
     aspect: Number(thumb.width) > 0 && Number(thumb.height) > 0
       ? Number(thumb.width) / Number(thumb.height)
-      : 1
+      : 1,
+    // The museum's own reading of the dominant colour, as HSL in degrees
+    // and percent. Null when the catalogue has none.
+    color: color && isFinite(Number(color.h))
+      ? { h: Number(color.h), s: Number(color.s) || 0, l: Number(color.l) || 0 }
+      : null
   }
 }
 
@@ -244,8 +250,99 @@ function openCommand(artworkId) {
   return ["xdg-open", pageUrl(artworkId)]
 }
 
-function wallpaperCommand(path) {
-  return ["omarchy-theme-bg-set", String(path || "")]
+// ---- hanging the picture ---------------------------------------------------
+
+var THEME_NAME = "easel"
+
+function hex2(value) {
+  var v = Math.max(0, Math.min(255, Math.round(value)))
+  return (v < 16 ? "0" : "") + v.toString(16)
+}
+
+function hsl(h, s, l) {
+  var hue = ((h % 360) + 360) % 360 / 360
+  var sat = Math.max(0, Math.min(100, s)) / 100
+  var light = Math.max(0, Math.min(100, l)) / 100
+  function channel(t) {
+    if (t < 0) t += 1
+    if (t > 1) t -= 1
+    if (t < 1 / 6) return p + (q - p) * 6 * t
+    if (t < 1 / 2) return q
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+    return p
+  }
+  var q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat
+  var p = 2 * light - q
+  return "#" + hex2(channel(hue + 1 / 3) * 255) + hex2(channel(hue) * 255) + hex2(channel(hue - 1 / 3) * 255)
+}
+
+// A dark palette built around the painting's dominant colour. The grounds
+// take its hue at low saturation so the whole desktop sits inside the
+// picture; the accent keeps the hue and enough chroma to read on the bar.
+// The ANSI set stays where terminals expect it, tinted toward the painting.
+function palette(color) {
+  var c = color || { h: 40, s: 20, l: 50 }
+  var h = c.h
+  var s = Math.max(12, Math.min(70, c.s))
+  var tint = Math.min(25, s)
+  var accentL = Math.max(58, Math.min(70, c.l))
+  return {
+    mode: "dark",
+    accent: hsl(h, Math.max(35, s), accentL),
+    selection: hsl(h, tint, 18),
+    muted: hsl(h, tint, 32),
+    background: hsl(h, tint, 8),
+    dark_background: hsl(h, tint, 5),
+    darker_background: hsl(h, tint, 3),
+    lighter_background: hsl(h, tint, 13),
+    foreground: hsl(h, 12, 82),
+    dark_foreground: hsl(h, 12, 48),
+    light_foreground: hsl(h, 12, 88),
+    bright_foreground: hsl(h, 12, 94),
+    red: hsl(4, 62, 66), yellow: hsl(42, 66, 66), orange: hsl(24, 68, 64),
+    green: hsl(120, 34, 60), cyan: hsl(186, 46, 58), blue: hsl(h, s, accentL),
+    magenta: hsl(288, 40, 68), brown: hsl(24, 34, 38),
+    bright_red: hsl(4, 76, 72), bright_yellow: hsl(42, 80, 72), bright_green: hsl(120, 48, 68),
+    bright_cyan: hsl(186, 60, 66), bright_blue: hsl(h, Math.min(80, s + 15), Math.min(78, accentL + 8)),
+    bright_magenta: hsl(288, 54, 76)
+  }
+}
+
+// Omarchy's colors.toml, in the order the shipped themes use.
+function colorsToml(color) {
+  var p = palette(color)
+  var groups = [
+    ["mode"],
+    ["accent", "selection", "muted"],
+    ["background", "dark_background", "darker_background", "lighter_background"],
+    ["foreground", "dark_foreground", "light_foreground", "bright_foreground"],
+    ["red", "yellow", "orange", "green", "cyan", "blue", "magenta", "brown"],
+    ["bright_red", "bright_yellow", "bright_green", "bright_cyan", "bright_blue", "bright_magenta"]
+  ]
+  var out = []
+  for (var g = 0; g < groups.length; g++) {
+    for (var i = 0; i < groups[g].length; i++) out.push(groups[g][i] + ' = "' + p[groups[g][i]] + '"')
+    out.push("")
+  }
+  return out.join("\n")
+}
+
+function themeDir(home) {
+  return String(home || "") + "/.config/omarchy/themes/" + THEME_NAME
+}
+
+// Writes the painting's theme — its colours and the picture as the only
+// background — and asks Omarchy to wear it. Everything untrusted travels as
+// a positional argument; the TOML is generated, never interpolated.
+function hangCommand(home, art, imagePath) {
+  var script =
+    'mkdir -p "$1/backgrounds" || exit 1; ' +
+    'rm -f "$1"/backgrounds/*; ' +
+    'cp "$2" "$1/backgrounds/$3.jpg" || exit 1; ' +
+    'printf %s "$4" > "$1/colors.toml" || exit 1; ' +
+    'exec omarchy-theme-set "$5"'
+  return ["sh", "-c", script, "sh", themeDir(home), String(imagePath || ""),
+    String(art && art.imageId || "artwork"), colorsToml(art && art.color), THEME_NAME]
 }
 
 function notificationText(value) {
@@ -345,7 +442,12 @@ if (typeof module !== "undefined") {
     curlImageCommand: curlImageCommand,
     existsCommand: existsCommand,
     openCommand: openCommand,
-    wallpaperCommand: wallpaperCommand,
+    THEME_NAME: THEME_NAME,
+    hsl: hsl,
+    palette: palette,
+    colorsToml: colorsToml,
+    themeDir: themeDir,
+    hangCommand: hangCommand,
     toastCommand: toastCommand,
     artistOf: artistOf,
     caption: caption,

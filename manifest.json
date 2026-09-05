@@ -30,7 +30,8 @@
     "defaultSection": "right",
     "defaults": {
       "notify": true,
-      "showTitle": false
+      "showTitle": false,
+      "recolor": true
     },
     "schema": [
       {
@@ -44,6 +45,12 @@
         "type": "boolean",
         "label": "Show the artist on the bar",
         "defaultValue": false
+      },
+      {
+        "key": "recolor",
+        "type": "boolean",
+        "label": "Hanging a picture recolours the desktop to match",
+        "defaultValue": true
       }
     ]
   }

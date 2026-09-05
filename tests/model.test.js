@@ -118,3 +118,58 @@ test("dayHeading names the day on the local calendar", () => {
   assert.equal(Model.dayHeading("20260905"), "Saturday, 5 September")
   assert.equal(Model.dayHeading("nonsense"), "")
 })
+
+test("the catalogue's dominant colour rides along as HSL", () => {
+  const withColor = Model.normalizeArtwork({ id: 1, image_id: "img", color: { h: 39, s: 24, l: 59, population: 263 } })
+  assert.deepEqual(withColor.color, { h: 39, s: 24, l: 59 })
+  assert.equal(Model.normalizeArtwork({ id: 2, image_id: "img", color: null }).color, null)
+  assert.equal(Model.normalizeArtwork({ id: 3, image_id: "img" }).color, null)
+  assert.ok(Model.FIELDS.includes("color"))
+})
+
+test("hsl converts the corners the way a browser would", () => {
+  assert.equal(Model.hsl(0, 100, 50), "#ff0000")
+  assert.equal(Model.hsl(120, 100, 25), "#008000")
+  assert.equal(Model.hsl(240, 100, 50), "#0000ff")
+  assert.equal(Model.hsl(0, 0, 50), "#808080")
+  assert.equal(Model.hsl(360 + 39, 24, 59), Model.hsl(39, 24, 59))
+})
+
+test("a palette keeps the painting's hue and stays dark and legible", () => {
+  const p = Model.palette({ h: 39, s: 24, l: 59 })
+  assert.equal(p.mode, "dark")
+  // Grounds are dark, foregrounds light, in every case.
+  for (const key of ["background", "dark_background", "darker_background", "lighter_background"]) {
+    assert.ok(parseInt(p[key].slice(1, 3), 16) < 0x40, `${key} is not dark: ${p[key]}`)
+  }
+  assert.ok(parseInt(p.foreground.slice(1, 3), 16) > 0xb0)
+  // A grey painting still gets a coloured accent, and a garish one is tamed.
+  assert.notEqual(Model.palette({ h: 200, s: 0, l: 50 }).accent, Model.palette({ h: 200, s: 0, l: 50 }).foreground)
+  assert.equal(Model.palette({ h: 0, s: 100, l: 50 }).accent, Model.palette({ h: 0, s: 70, l: 58 }).accent)
+  // No catalogue colour at all still produces a theme.
+  assert.ok(/^#[0-9a-f]{6}$/.test(Model.palette(null).accent))
+})
+
+test("colors.toml carries every key Omarchy's themes define", () => {
+  const toml = Model.colorsToml({ h: 39, s: 24, l: 59 })
+  const keys = ["mode", "accent", "selection", "muted", "background", "dark_background", "darker_background",
+    "lighter_background", "foreground", "dark_foreground", "light_foreground", "bright_foreground",
+    "red", "yellow", "orange", "green", "cyan", "blue", "magenta", "brown",
+    "bright_red", "bright_yellow", "bright_green", "bright_cyan", "bright_blue", "bright_magenta"]
+  for (const key of keys) assert.match(toml, new RegExp(`^${key} = "`, "m"), `missing ${key}`)
+  assert.match(toml, /^mode = "dark"$/m)
+})
+
+test("hanging writes a user theme and wears it, with nothing interpolated", () => {
+  const art = { imageId: "abc-123", color: { h: 39, s: 24, l: 59 } }
+  const cmd = Model.hangCommand("/home/me", art, "/home/me/.cache/omarchy/easel/abc-123-2400.jpg")
+  assert.equal(cmd[0], "sh")
+  assert.equal(cmd[4], "/home/me/.config/omarchy/themes/easel")
+  assert.equal(cmd[5], "/home/me/.cache/omarchy/easel/abc-123-2400.jpg")
+  assert.equal(cmd[6], "abc-123")
+  assert.match(cmd[7], /^mode = "dark"/)
+  assert.equal(cmd[8], "easel")
+  assert.match(cmd[2], /omarchy-theme-set "\$5"$/)
+  assert.ok(!cmd[2].includes("abc-123"))
+  assert.equal(Model.themeDir("/home/me"), "/home/me/.config/omarchy/themes/easel")
+})
