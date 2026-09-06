@@ -20,9 +20,19 @@ Item {
   property int offset: 0
 
   property var art: null
+  // The 843px render as painted, and what the bar and panel actually show —
+  // the same file, or its twin rendered in the current theme.
+  property string plainPath: ""
   property string imagePath: ""
   property bool loading: false
   property string error: ""
+  property string themeError: ""
+
+  // The desktop's palette, watched so a theme change re-renders the picture.
+  readonly property string colorsPath: home + "/.local/state/omarchy/current/theme/colors.toml"
+  property var colors: null
+  readonly property bool themed: setting("themed", false) === true
+  readonly property string themeKey: Model.themeKey(colors)
 
   property bool hanging: false
   property string hangError: ""
@@ -43,6 +53,8 @@ Item {
   property string _imageUrlPending: ""
   property string _hangPending: ""
   property string _hangUrlPending: ""
+  property string _hangThemed: ""
+  property string _themedPending: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -103,11 +115,29 @@ Item {
   }
 
   function adoptImage() {
-    imagePath = _imagePending
+    plainPath = _imagePending
     loading = false
     retryTimer.stop()
     announce()
+    present()
   }
+
+  // Show the picture as painted, or in the current theme — rendered once
+  // per palette and kept beside the original.
+  function present() {
+    if (plainPath === "") return
+    themeError = ""
+    if (!themed || !colors) {
+      imagePath = plainPath
+      return
+    }
+    _themedPending = Model.themedPath(plainPath, themeKey)
+    themedCheckProcess.command = Model.existsCommand(_themedPending)
+    themedCheckProcess.running = true
+  }
+
+  onThemedChanged: present()
+  onThemeKeyChanged: present()
 
   function announce() {
     if (!notify || !art) return
@@ -136,13 +166,67 @@ Item {
     hangCheckProcess.running = true
   }
 
-  // With the full-size copy on disk: either dress the whole desktop in the
-  // painting's colours, or just put it on the wall.
+  // With the full-size copy on disk: in the current theme, the desktop
+  // already matches, so the themed render simply goes on the wall. As
+  // painted, either dress the whole desktop in the painting's colours or
+  // just put it up.
   function applyHang() {
+    if (themed && colors) {
+      _hangThemed = Model.themedPath(_hangPending, themeKey)
+      hangRenderProcess.command = Model.themedCommand(_hangPending, _hangThemed, colors)
+      hangRenderProcess.running = true
+      return
+    }
     hangApplyProcess.command = recolor
       ? Model.hangCommand(home, art, _hangPending)
       : Model.wallpaperCommand(_hangPending)
     hangApplyProcess.running = true
+  }
+
+  FileView {
+    path: root.colorsPath
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.colors = Model.parseColors(text())
+    onLoadFailed: root.colors = null
+    onFileChanged: reload()
+  }
+
+  Process {
+    id: themedCheckProcess
+    onExited: function(code) {
+      if (code === 0) {
+        root.imagePath = root._themedPending
+        return
+      }
+      themedRenderProcess.command = Model.themedCommand(root.plainPath, root._themedPending, root.colors)
+      themedRenderProcess.running = true
+    }
+  }
+
+  Process {
+    id: themedRenderProcess
+    onExited: function(code) {
+      if (code === 0) {
+        root.imagePath = root._themedPending
+        return
+      }
+      root.imagePath = root.plainPath
+      root.themeError = "Could not render it in your theme — is ImageMagick installed?"
+    }
+  }
+
+  Process {
+    id: hangRenderProcess
+    onExited: function(code) {
+      if (code !== 0) {
+        root.hanging = false
+        root.hangError = "Could not render it in your theme"
+        return
+      }
+      hangApplyProcess.command = Model.wallpaperCommand(root._hangThemed)
+      hangApplyProcess.running = true
+    }
   }
 
   Process {

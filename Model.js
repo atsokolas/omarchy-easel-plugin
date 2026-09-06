@@ -426,12 +426,75 @@ function copyCommand(payload) {
   return ["sh", "-c", 'printf %s "$1" | wl-copy', "sh", String(payload || "")]
 }
 
+
+// ---- in my theme -----------------------------------------------------------
+
+// The current theme's palette, from Omarchy's colors.toml — only the four
+// keys the render uses. Null when the file is missing or unreadable.
+function parseColors(toml) {
+  var out = {}
+  var lines = String(toml || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var m = lines[i].match(/^\s*([a-z_]+)\s*=\s*"([^"]*)"/)
+    if (m) out[m[1]] = m[2]
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(out.background || "") || !/^#[0-9a-fA-F]{6}$/.test(out.foreground || "")) return null
+  return {
+    mode: out.mode === "light" ? "light" : "dark",
+    background: out.background.toLowerCase(),
+    foreground: out.foreground.toLowerCase(),
+    accent: /^#[0-9a-fA-F]{6}$/.test(out.accent || "") ? out.accent.toLowerCase() : out.foreground.toLowerCase(),
+    muted: /^#[0-9a-fA-F]{6}$/.test(out.muted || "") ? out.muted.toLowerCase() : out.background.toLowerCase()
+  }
+}
+
+function luma(hex) {
+  var n = parseInt(String(hex).slice(1), 16)
+  return 0.2126 * (n >> 16 & 255) + 0.7152 * (n >> 8 & 255) + 0.0722 * (n & 255)
+}
+
+// Four stops, darkest first: shadows take the ground, midtones the muted and
+// accent colours, highlights the foreground. Sorting by luminance is what
+// makes a light theme come out right without a second code path.
+function themeStops(colors) {
+  if (!colors) return []
+  return [colors.background, colors.muted, colors.accent, colors.foreground].sort(function(a, b) { return luma(a) - luma(b) })
+}
+
+// Names a render of a picture in a palette, for the cache.
+function themeKey(colors) {
+  var stops = themeStops(colors)
+  return stops.length ? stops.join("").replace(/#/g, "") + (colors.mode === "light" ? "-l" : "") : ""
+}
+
+function themedPath(path, key) {
+  var p = String(path || "")
+  return p === "" || !key ? p : p.replace(/\.jpg$/, "") + "-" + key + ".jpg"
+}
+
+// Renders `src` into the palette. A picture that is mostly paper — a print or
+// a drawing — goes ink-light on a dark theme rather than as a pale slab, so
+// the mean luminance decides whether to invert first. Everything travels as a
+// positional argument. The lookup leaves the image typed as greyscale, and a
+// greyscale JPEG has nowhere to keep the colours, so the type is forced back
+// to true colour before the write.
+function themedCommand(src, out, colors) {
+  var stops = themeStops(colors)
+  var script =
+    'paper=$(magick "$1" -colorspace Gray -format "%[fx:mean>0.6]" info:) || exit 1; ' +
+    'neg=""; [ "$paper" = 1 ] && [ "$7" = dark ] && neg=-negate; ' +
+    'magick "$1" -colorspace Gray -auto-level $neg ' +
+    '\\( xc:"$3" xc:"$4" xc:"$5" xc:"$6" +append -filter Triangle -resize 256x1! \\) -clut -type TrueColor -quality 88 "$2.part" ' +
+    '&& mv "$2.part" "$2" || { rm -f "$2.part"; exit 1; }'
+  return ["sh", "-c", script, "sh", String(src || ""), String(out || ""), stops[0], stops[1], stops[2], stops[3], colors ? colors.mode : "dark"]
+}
+
 function statusLine(state) {
   var s = state || {}
   if (s.error) return s.error
   if (s.loading) return "Visiting the collection…"
   if (!s.art) return "Nothing hung yet"
-  return CREDIT + " · public domain"
+  return CREDIT + " · public domain" + (s.themed ? " · in your theme" : "")
 }
 
 if (typeof module !== "undefined") {
@@ -480,6 +543,12 @@ if (typeof module !== "undefined") {
     frameColor: frameColor,
     copyPayload: copyPayload,
     copyCommand: copyCommand,
+    parseColors: parseColors,
+    luma: luma,
+    themeStops: themeStops,
+    themeKey: themeKey,
+    themedPath: themedPath,
+    themedCommand: themedCommand,
     statusLine: statusLine
   }
 }

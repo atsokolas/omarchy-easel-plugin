@@ -86,6 +86,11 @@ BarWidget {
       if (panelLoader.item && panelLoader.item.copy) panelLoader.item.copy()
       return "ok"
     }
+    // Flip between the picture as painted and in the current theme.
+    function themed(): string {
+      if (panelLoader.item && panelLoader.item.toggleThemed) panelLoader.item.toggleThemed()
+      return "ok"
+    }
     function hang(): string {
       if (!root.service) return "no service"
       root.service.hang()
@@ -104,6 +109,7 @@ BarWidget {
         loading: s.loading,
         error: s.error,
         image: s.imagePath,
+        themed: s.themed,
         artwork: s.art ? Model.caption(s.art) : "",
         color: s.art ? s.art.color : null,
         url: s.art ? Model.pageUrl(s.art.id) : ""

@@ -31,7 +31,8 @@
     "defaults": {
       "notify": true,
       "showTitle": false,
-      "recolor": true
+      "recolor": true,
+      "themed": false
     },
     "schema": [
       {
@@ -51,6 +52,12 @@
         "type": "boolean",
         "label": "Hanging a picture recolours the desktop to match",
         "defaultValue": true
+      },
+      {
+        "key": "themed",
+        "type": "boolean",
+        "label": "Show the picture in my current theme",
+        "defaultValue": false
       }
     ]
   }

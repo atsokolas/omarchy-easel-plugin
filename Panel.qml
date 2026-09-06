@@ -48,6 +48,21 @@ Panel {
   onServiceChanged: pushSettings()
   Component.onCompleted: pushSettings()
 
+  function persistSettings(values) {
+    var entryData = { id: root.moduleName }
+    for (var existing in root.settings) if (existing !== "id") entryData[existing] = root.settings[existing]
+    for (var key in values) {
+      if (values[key] === undefined) delete entryData[key]
+      else entryData[key] = values[key]
+    }
+    root.settings = entryData
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entryData)
+    pushSettings()
+  }
+
+  function toggleThemed() { persistSettings({ themed: !service.themed }) }
+
   function open() {
     openedFromHotkey = false
     setCenterHoverRevealSuppressed(false)
@@ -108,6 +123,7 @@ Panel {
     if (k === "n") service.shuffle()
     else if (k === "h") service.hang()
     else if (k === "c") copy()
+    else if (k === "t") toggleThemed()
     else if (k === "o") service.open()
     else if (k === "r") service.refresh()
   }
@@ -361,6 +377,19 @@ Panel {
           }
 
           Button {
+            text: service.themed ? "AS PAINTED" : "IN MY THEME"
+            foreground: service.themed ? Color.accent : root.foreground
+            background: "transparent"
+            accent: Color.accent
+            fontFamily: root.fontFamily
+            fontSize: Style.font.caption
+            horizontalPadding: Style.space(7)
+            verticalPadding: Style.space(1)
+            enabled: root.art !== null
+            onClicked: root.toggleThemed()
+          }
+
+          Button {
             text: copiedTimer.running ? "COPIED" : "COPY"
             foreground: root.foreground
             background: "transparent"
@@ -393,8 +422,9 @@ Panel {
           Layout.fillWidth: true
           text: service.hangError !== ""
             ? service.hangError
-            : Model.statusLine({ error: service.error, loading: service.loading, art: root.art })
-          color: service.hangError !== "" || service.error !== "" ? Color.urgent : root.dim
+            : (service.themeError !== "" ? service.themeError
+              : Model.statusLine({ error: service.error, loading: service.loading, art: root.art, themed: service.themed }))
+          color: service.hangError !== "" || service.themeError !== "" || service.error !== "" ? Color.urgent : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight

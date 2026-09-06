@@ -9,6 +9,7 @@ The bar shows the picture itself — a tiny framed canvas, roughly 14 pixels tal
 - **A piece a day** — a new work at local midnight, the same one all day on every monitor.
 - **The wall label** — title, artist with dates, year, medium, dimensions, place of origin, and department.
 - **Hang** — put today's piece on the desktop at 2400px *and* dress the desktop in its colours: Easel writes an Omarchy theme from the painting's dominant colour and wears it. Turn `recolor` off for the plain wallpaper.
+- **In my theme** — see the picture rendered in the desktop's own palette: shadows on the theme's ground, highlights in its foreground, the accent through the midtones. A print goes ink-light on a dark theme. It follows theme changes, and Hang puts the themed render straight on the wall.
 - **Open** — jump to the artwork's page at artic.edu.
 - **Another** — draw a different piece without waiting for tomorrow.
 - **A quiet toast** once a day announcing what went up. Shuffles and refreshes stay silent.
@@ -55,6 +56,7 @@ The museum records a dominant colour for most works. Hanging builds a dark palet
 | Panel, click the picture | Open it at artic.edu |
 | Panel, `n` | Another piece |
 | Panel, `h` | Hang it |
+| Panel, `t` | In my theme / as painted |
 | Panel, `c` | Copy the caption, medium, and page to the clipboard |
 | Panel, `o` | Open at artic.edu |
 | Panel, `r` | Refresh |
@@ -68,6 +70,7 @@ Inline on the bar entry in `~/.config/omarchy/shell.json`:
 | `notify` | `true` | Send one notification a day when the new piece goes up |
 | `showTitle` | `false` | Put the artist's name on the bar next to the canvas |
 | `recolor` | `true` | Hanging a picture recolours the desktop to match it |
+| `themed` | `false` | Show the picture in the current theme rather than as painted |
 
 ## IPC
 
@@ -76,6 +79,7 @@ omarchy-shell atsokolas.easel toggle
 omarchy-shell atsokolas.easel shuffle
 omarchy-shell atsokolas.easel hang
 omarchy-shell atsokolas.easel copy
+omarchy-shell atsokolas.easel themed      # flip between as painted and in my theme
 omarchy-shell atsokolas.easel refresh
 omarchy-shell atsokolas.easel status
 ```
@@ -86,6 +90,7 @@ omarchy-shell atsokolas.easel status
 
 - Omarchy Quattro (Quickshell plugin support)
 - `curl`
+- `magick` (ImageMagick) for the in-my-theme render; without it the picture shows as painted
 - Network access to `api.artic.edu` and `www.artic.edu`
 
 Images are cached under `~/.cache/omarchy/easel/`, keyed by artwork and render width, so a day's picture is fetched once.

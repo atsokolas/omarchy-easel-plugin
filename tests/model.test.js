@@ -203,3 +203,41 @@ test("copying carries the caption, the medium, and the page", () => {
   assert.equal(cmd[4], "a 'quoted' $line")
   assert.ok(!cmd[2].includes("quoted"))
 })
+
+const TOML = 'mode = "dark"\n\naccent = "#7aa2f7"\nselection = "#292e42"\nmuted = "#414868"\n\nbackground = "#1a1b26"\nforeground = "#a9b1d6"\n'
+
+test("the theme's palette is read from colors.toml", () => {
+  const colors = Model.parseColors(TOML)
+  assert.deepEqual(colors, { mode: "dark", background: "#1a1b26", foreground: "#a9b1d6", accent: "#7aa2f7", muted: "#414868" })
+  assert.equal(Model.parseColors(""), null)
+  assert.equal(Model.parseColors('background = "#123"'), null)
+  assert.equal(Model.parseColors('background = "#000000"\nforeground = "#ffffff"').accent, "#ffffff")
+  assert.equal(Model.parseColors('mode = "light"\nbackground = "#ffffff"\nforeground = "#000000"').mode, "light")
+})
+
+test("stops run dark to light whatever the theme's mode", () => {
+  assert.deepEqual(Model.themeStops(Model.parseColors(TOML)), ["#1a1b26", "#414868", "#7aa2f7", "#a9b1d6"])
+  const light = Model.parseColors('mode = "light"\nbackground = "#fafafa"\nforeground = "#202020"\naccent = "#3060c0"\nmuted = "#a0a0a0"')
+  assert.deepEqual(Model.themeStops(light), ["#202020", "#3060c0", "#a0a0a0", "#fafafa"])
+  assert.deepEqual(Model.themeStops(null), [])
+  assert.ok(Model.luma("#ffffff") > Model.luma("#7aa2f7") && Model.luma("#7aa2f7") > Model.luma("#000000"))
+})
+
+test("a themed render is cached beside the original, keyed by the palette", () => {
+  const key = Model.themeKey(Model.parseColors(TOML))
+  assert.equal(key, "1a1b264148687aa2f7a9b1d6")
+  assert.equal(Model.themedPath("/c/easel/abc-843.jpg", key), "/c/easel/abc-843-1a1b264148687aa2f7a9b1d6.jpg")
+  assert.equal(Model.themedPath("", key), "")
+  assert.equal(Model.themedPath("/c/x.jpg", ""), "/c/x.jpg")
+  assert.notEqual(Model.themeKey(Model.parseColors(TOML.replace('"dark"', '"light"'))), key)
+})
+
+test("rendering in the theme passes every stop positionally and inverts paper on a dark theme", () => {
+  const cmd = Model.themedCommand("/c/in.jpg", "/c/out.jpg", Model.parseColors(TOML))
+  assert.equal(cmd[0], "sh")
+  assert.deepEqual(cmd.slice(4), ["/c/in.jpg", "/c/out.jpg", "#1a1b26", "#414868", "#7aa2f7", "#a9b1d6", "dark"])
+  assert.match(cmd[2], /mean>0\.6/)
+  assert.match(cmd[2], /-negate/)
+  assert.match(cmd[2], /-clut -type TrueColor/)
+  assert.ok(!cmd[2].includes("#"))
+})
