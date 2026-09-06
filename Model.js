@@ -42,7 +42,7 @@ var ROOMS = [
 var FIELDS = [
   "id", "title", "artist_title", "artist_display", "date_display",
   "medium_display", "dimensions", "department_title", "place_of_origin",
-  "artwork_type_title", "image_id", "thumbnail", "color"
+  "artwork_type_title", "image_id", "thumbnail", "color", "main_reference_number"
 ]
 
 // Everything here reproduces well at panel size. A batch with none of them
@@ -169,6 +169,8 @@ function normalizeArtwork(row) {
     department: text(row.department_title),
     origin: text(row.place_of_origin),
     type: text(row.artwork_type_title),
+    // The museum's accession number — the last line of every wall label.
+    reference: text(row.main_reference_number),
     imageId: imageId,
     altText: text(thumb.alt_text),
     aspect: Number(thumb.width) > 0 && Number(thumb.height) > 0
@@ -263,6 +265,8 @@ function hsl(h, s, l) {
   var hue = ((h % 360) + 360) % 360 / 360
   var sat = Math.max(0, Math.min(100, s)) / 100
   var light = Math.max(0, Math.min(100, l)) / 100
+  var q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat
+  var p = 2 * light - q
   function channel(t) {
     if (t < 0) t += 1
     if (t > 1) t -= 1
@@ -271,8 +275,6 @@ function hsl(h, s, l) {
     if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
     return p
   }
-  var q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat
-  var p = 2 * light - q
   return "#" + hex2(channel(hue + 1 / 3) * 255) + hex2(channel(hue) * 255) + hex2(channel(hue - 1 / 3) * 255)
 }
 
@@ -393,13 +395,35 @@ function factRows(art) {
     { label: "Medium", value: art.medium },
     { label: "Size", value: art.dimensions },
     { label: "Origin", value: art.origin },
-    { label: "Gallery", value: art.department }
+    { label: "Gallery", value: art.department },
+    { label: "Ref.", value: art.reference }
   ]
   var rows = []
   for (var i = 0; i < candidates.length; i++) {
     if (candidates[i].value !== "") rows.push(candidates[i])
   }
   return rows
+}
+
+// The frame is chosen for the picture: its dominant hue, quieter. Empty
+// when the catalogue has no colour, so the bar can fall back to its own.
+function frameColor(art) {
+  var c = art && art.color
+  if (!c) return ""
+  return hsl(c.h, Math.max(18, Math.min(45, c.s)), 58)
+}
+
+// What goes to the clipboard: the caption, the medium, and the page.
+function copyPayload(art) {
+  if (!art) return ""
+  var lines = [caption(art)]
+  if (art.medium) lines.push(art.medium)
+  lines.push(pageUrl(art.id))
+  return lines.join("\n")
+}
+
+function copyCommand(payload) {
+  return ["sh", "-c", 'printf %s "$1" | wl-copy', "sh", String(payload || "")]
 }
 
 function statusLine(state) {
@@ -453,6 +477,9 @@ if (typeof module !== "undefined") {
     caption: caption,
     subtitle: subtitle,
     factRows: factRows,
+    frameColor: frameColor,
+    copyPayload: copyPayload,
+    copyCommand: copyCommand,
     statusLine: statusLine
   }
 }

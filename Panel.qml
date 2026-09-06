@@ -40,6 +40,8 @@ Panel {
     ? bar.shell.serviceFor(moduleName) : null
   readonly property var service: sharedService || localService
   readonly property var art: service.art
+  // The mat is cut to match the picture.
+  readonly property color tint: art && Model.frameColor(art) !== "" ? Model.frameColor(art) : foreground
 
   function pushSettings() { if (service) service.settings = settings }
   onSettingsChanged: pushSettings()
@@ -73,6 +75,18 @@ Panel {
   function refresh() { service.refresh() }
   function shuffle() { service.shuffle() }
 
+  function copy() {
+    var payload = Model.copyPayload(art)
+    if (payload === "") return
+    Quickshell.execDetached(Model.copyCommand(payload))
+    copiedTimer.restart()
+  }
+
+  Timer {
+    id: copiedTimer
+    interval: 1600
+  }
+
   function switchPanel(direction) {
     if (root.bar && typeof root.bar.switchPanelFrom === "function")
       return root.bar.switchPanelFrom(root.barIdentity, direction)
@@ -93,6 +107,7 @@ Panel {
     var k = String(key || "").toLowerCase()
     if (k === "n") service.shuffle()
     else if (k === "h") service.hang()
+    else if (k === "c") copy()
     else if (k === "o") service.open()
     else if (k === "r") service.refresh()
   }
@@ -201,10 +216,12 @@ Panel {
           Layout.fillWidth: true
           Layout.fillHeight: true
           Layout.minimumHeight: Style.space(180)
-          color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.05)
+          color: Qt.rgba(root.tint.r, root.tint.g, root.tint.b, 0.07)
           border.width: 1
-          border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.35)
+          border.color: Qt.rgba(root.tint.r, root.tint.g, root.tint.b, 0.45)
           radius: Style.cornerRadius
+          Behavior on color { ColorAnimation { duration: 420 } }
+          Behavior on border.color { ColorAnimation { duration: 420 } }
 
           Image {
             id: plate
@@ -341,6 +358,19 @@ Panel {
             verticalPadding: Style.space(1)
             enabled: root.art !== null && !service.hanging
             onClicked: service.hang()
+          }
+
+          Button {
+            text: copiedTimer.running ? "COPIED" : "COPY"
+            foreground: root.foreground
+            background: "transparent"
+            accent: Color.accent
+            fontFamily: root.fontFamily
+            fontSize: Style.font.caption
+            horizontalPadding: Style.space(7)
+            verticalPadding: Style.space(1)
+            enabled: root.art !== null
+            onClicked: root.copy()
           }
 
           Button {

@@ -173,3 +173,33 @@ test("hanging writes a user theme and wears it, with nothing interpolated", () =
   assert.ok(!cmd[2].includes("abc-123"))
   assert.equal(Model.themeDir("/home/me"), "/home/me/.config/omarchy/themes/easel")
 })
+
+test("the frame is chosen for the picture", () => {
+  assert.match(Model.frameColor({ color: { h: 39, s: 24, l: 59 } }), /^#[0-9a-f]{6}$/)
+  assert.equal(Model.frameColor({ color: { h: 39, s: 24, l: 59 } }), Model.hsl(39, 24, 58))
+  // A garish or a grey painting still gets a quiet frame.
+  assert.equal(Model.frameColor({ color: { h: 0, s: 100, l: 50 } }), Model.hsl(0, 45, 58))
+  assert.equal(Model.frameColor({ color: { h: 200, s: 0, l: 50 } }), Model.hsl(200, 18, 58))
+  assert.equal(Model.frameColor({ color: null }), "")
+  assert.equal(Model.frameColor(null), "")
+})
+
+test("the wall label ends with the accession number", () => {
+  const art = Model.normalizeArtwork({ id: 1, image_id: "img", main_reference_number: "1933.1007" })
+  assert.equal(art.reference, "1933.1007")
+  const rows = Model.factRows(art)
+  assert.deepEqual(rows[rows.length - 1], { label: "Ref.", value: "1933.1007" })
+  assert.ok(!Model.factRows(Model.normalizeArtwork({ id: 1, image_id: "img" })).some(r => r.label === "Ref."))
+  assert.ok(Model.FIELDS.includes("main_reference_number"))
+})
+
+test("copying carries the caption, the medium, and the page", () => {
+  const art = { id: "235334", title: "Birch and Oak", artist: "James Duffield Harding", date: "1841", medium: "Lithograph" }
+  assert.equal(Model.copyPayload(art), "Birch and Oak — James Duffield Harding, 1841\nLithograph\nhttps://www.artic.edu/artworks/235334")
+  assert.equal(Model.copyPayload(Object.assign({}, art, { medium: "" })).split("\n").length, 2)
+  assert.equal(Model.copyPayload(null), "")
+  const cmd = Model.copyCommand("a 'quoted' $line")
+  assert.equal(cmd[0], "sh")
+  assert.equal(cmd[4], "a 'quoted' $line")
+  assert.ok(!cmd[2].includes("quoted"))
+})

@@ -82,6 +82,10 @@ BarWidget {
     function toggle(): void { root.togglePanel() }
     function refresh(): string { root.refresh(); return "ok" }
     function shuffle(): string { root.shuffle(); return "ok" }
+    function copy(): string {
+      if (panelLoader.item && panelLoader.item.copy) panelLoader.item.copy()
+      return "ok"
+    }
     function hang(): string {
       if (!root.service) return "no service"
       root.service.hang()
@@ -151,6 +155,9 @@ BarWidget {
       readonly property real gap: Style.spaceReal(7)
       readonly property real labelWidth: label.visible ? Math.min(label.implicitWidth, Style.spaceReal(120)) : 0
       readonly property real contentWidth: frameWidth + (label.visible ? gap + labelWidth : 0)
+      // The frame is chosen for the picture; without a catalogue colour it
+      // takes the bar's.
+      readonly property color tint: root.art && Model.frameColor(root.art) !== "" ? Model.frameColor(root.art) : button.foreground
 
       Rectangle {
         id: frame
@@ -160,10 +167,11 @@ BarWidget {
         width: content.frameWidth
         height: content.frameHeight
         radius: Math.min(2, Style.cornerRadius)
-        color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b, 0.10)
+        color: Qt.rgba(content.tint.r, content.tint.g, content.tint.b, 0.12)
         border.width: 1
-        border.color: Qt.rgba(button.foreground.r, button.foreground.g, button.foreground.b,
-                              root.opened ? 0.85 : 0.5)
+        border.color: root.opened
+          ? Color.accent
+          : Qt.rgba(content.tint.r, content.tint.g, content.tint.b, 0.75)
         opacity: root.shownPath === "" ? 1 : root.hang
         scale: 0.86 + root.hang * 0.14
 

@@ -17,6 +17,8 @@ The bar shows the picture itself — a tiny framed canvas, roughly 14 pixels tal
 
 A new picture is hung, not swapped: the old canvas lifts off the wall before the new one drops onto its nail and settles. It hangs from that nail, too — hover and it swings, then comes to rest.
 
+The frame is chosen for the picture: the museum records each work's dominant colour, and the bar frame and the panel's mat take that hue, quietened. The wall label ends the way a real one does, with the accession number.
+
 ## Install
 
 ```bash
@@ -53,6 +55,7 @@ The museum records a dominant colour for most works. Hanging builds a dark palet
 | Panel, click the picture | Open it at artic.edu |
 | Panel, `n` | Another piece |
 | Panel, `h` | Hang it |
+| Panel, `c` | Copy the caption, medium, and page to the clipboard |
 | Panel, `o` | Open at artic.edu |
 | Panel, `r` | Refresh |
 
@@ -72,6 +75,7 @@ Inline on the bar entry in `~/.config/omarchy/shell.json`:
 omarchy-shell atsokolas.easel toggle
 omarchy-shell atsokolas.easel shuffle
 omarchy-shell atsokolas.easel hang
+omarchy-shell atsokolas.easel copy
 omarchy-shell atsokolas.easel refresh
 omarchy-shell atsokolas.easel status
 ```
