@@ -444,7 +444,8 @@ function parseColors(toml) {
     background: out.background.toLowerCase(),
     foreground: out.foreground.toLowerCase(),
     accent: /^#[0-9a-fA-F]{6}$/.test(out.accent || "") ? out.accent.toLowerCase() : out.foreground.toLowerCase(),
-    muted: /^#[0-9a-fA-F]{6}$/.test(out.muted || "") ? out.muted.toLowerCase() : out.background.toLowerCase()
+    muted: /^#[0-9a-fA-F]{6}$/.test(out.muted || "") ? out.muted.toLowerCase() : out.background.toLowerCase(),
+    red: /^#[0-9a-fA-F]{6}$/.test(out.red || "") ? out.red.toLowerCase() : out.foreground.toLowerCase()
   }
 }
 

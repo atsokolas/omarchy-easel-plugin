@@ -31,6 +31,9 @@ BarWidget {
   }
 
   readonly property var service: panelLoader.item ? panelLoader.item.service : null
+  // Accent and warning come from the theme palette: the shell's Color
+  // singleton isn't reliably visible to third-party plugins.
+  readonly property color accent: service && service.colors ? service.colors.accent : (bar ? bar.barForeground : Color.foreground)
   readonly property var art: service ? service.art : null
   readonly property string imagePath: service ? service.imagePath : ""
   readonly property bool loading: service ? service.loading === true : false
@@ -176,7 +179,7 @@ BarWidget {
         color: Qt.rgba(content.tint.r, content.tint.g, content.tint.b, 0.12)
         border.width: 1
         border.color: root.opened
-          ? Color.accent
+          ? root.accent
           : Qt.rgba(content.tint.r, content.tint.g, content.tint.b, 0.75)
         opacity: root.shownPath === "" ? 1 : root.hang
         scale: 0.86 + root.hang * 0.14

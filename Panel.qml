@@ -20,6 +20,11 @@ Panel {
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.55)
+  // Accent and warning come from the theme palette: the shell's Color
+  // singleton isn't reliably visible to third-party plugins.
+  readonly property var palette: service ? service.colors : null
+  readonly property color accent: palette ? palette.accent : foreground
+  readonly property color urgent: palette ? palette.red : foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   // Content settles in behind the panel frame each time it opens. Driven by
@@ -264,7 +269,7 @@ Panel {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             text: service.error !== "" ? service.error : "Visiting the collection…"
-            color: service.error !== "" ? Color.urgent : root.dim
+            color: service.error !== "" ? root.urgent : root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.bodySmall
           }
@@ -354,7 +359,7 @@ Panel {
             text: "ANOTHER"
             foreground: root.foreground
             background: "transparent"
-            accent: Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
@@ -367,7 +372,7 @@ Panel {
             text: service.hanging ? "HANGING…" : "HANG"
             foreground: root.foreground
             background: "transparent"
-            accent: Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
@@ -378,9 +383,9 @@ Panel {
 
           Button {
             text: service.themed ? "AS PAINTED" : "IN MY THEME"
-            foreground: service.themed ? Color.accent : root.foreground
+            foreground: service.themed ? root.accent : root.foreground
             background: "transparent"
-            accent: Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
@@ -393,7 +398,7 @@ Panel {
             text: copiedTimer.running ? "COPIED" : "COPY"
             foreground: root.foreground
             background: "transparent"
-            accent: Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
@@ -406,7 +411,7 @@ Panel {
             text: "OPEN"
             foreground: root.foreground
             background: "transparent"
-            accent: Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             fontSize: Style.font.caption
             horizontalPadding: Style.space(7)
@@ -424,7 +429,7 @@ Panel {
             ? service.hangError
             : (service.themeError !== "" ? service.themeError
               : Model.statusLine({ error: service.error, loading: service.loading, art: root.art, themed: service.themed }))
-          color: service.hangError !== "" || service.themeError !== "" || service.error !== "" ? Color.urgent : root.dim
+          color: service.hangError !== "" || service.themeError !== "" || service.error !== "" ? root.urgent : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
