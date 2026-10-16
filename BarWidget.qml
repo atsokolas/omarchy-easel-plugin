@@ -33,7 +33,7 @@ BarWidget {
   readonly property var service: panelLoader.item ? panelLoader.item.service : null
   // Accent and warning come from the theme palette: the shell's Color
   // singleton isn't reliably visible to third-party plugins.
-  readonly property color accent: service && service.colors ? service.colors.accent : (bar ? bar.barForeground : Color.foreground)
+  readonly property color accent: service && service.colors ? service.colors.accent : (bar ? bar.barForeground : "#cccccc")
   readonly property var art: service ? service.art : null
   readonly property string imagePath: service ? service.imagePath : ""
   readonly property bool loading: service ? service.loading === true : false

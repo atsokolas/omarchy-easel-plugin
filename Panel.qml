@@ -18,7 +18,7 @@ Panel {
   property bool openedFromHotkey: false
 
   readonly property var barIdentity: hostWidget || root
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
+  readonly property color foreground: bar ? bar.foreground : (service && service.colors ? service.colors.foreground : "#cccccc")
   readonly property color dim: Qt.darker(foreground, 1.55)
   // Accent and warning come from the theme palette: the shell's Color
   // singleton isn't reliably visible to third-party plugins.
