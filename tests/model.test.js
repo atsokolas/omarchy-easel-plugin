@@ -2,6 +2,8 @@ const test = require("node:test")
 const assert = require("node:assert/strict")
 const Model = require("../Model.js")
 
+const IMG = "2c7e4b1a-6f0d-4a3e-9b8c-1d2e3f405a6b"
+
 function searchBody(rows) {
   return JSON.stringify({ pagination: { total: 62054 }, data: rows })
 }
@@ -18,7 +20,7 @@ function row(overrides) {
     department_title: "Arts of the Americas",
     place_of_origin: "France",
     artwork_type_title: "Painting",
-    image_id: "3b885ae0",
+    image_id: IMG,
     thumbnail: { width: 8470, height: 12853, alt_text: "A mother washing a child's feet." }
   }, overrides)
 }
@@ -88,17 +90,16 @@ test("picking is stable for a seed and spreads across the batch", () => {
 test("renders are fitted inside a box so small works are never upscaled", () => {
   // A bare `843,` asks the museum to upscale anything narrower and it
   // answers 403; `!843,843` fits inside and stops at the source.
-  assert.equal(Model.imageUrl("abc", 843), "https://www.artic.edu/iiif/2/abc/full/!843,843/0/default.jpg")
-  assert.equal(Model.cachePath("/home/x", "abc", 2400), "/home/x/.cache/omarchy/easel/abc-2400.jpg")
+  assert.equal(Model.imageUrl(IMG, 843), "https://www.artic.edu/iiif/2/" + IMG + "/full/!843,843/0/default.jpg")
+  assert.equal(Model.cachePath("/home/x", IMG, 2400), "/home/x/.cache/omarchy/easel/" + IMG + "-2400.jpg")
   assert.equal(Model.imageUrl("", 843), "")
   assert.equal(Model.cachePath("/home/x", "", 843), "")
   assert.equal(Model.pageUrl(111442), "https://www.artic.edu/artworks/111442")
 })
 
 test("the museum needs to be told who is asking for pictures", () => {
-  assert.ok(Model.curlImageCommand("u", "/tmp/p").includes("AIC-User-Agent: omarchy-easel/1.0"))
-  assert.ok(Model.curlImageCommand("u", "/tmp/p").includes("--create-dirs"))
-  assert.ok(Model.curlJsonCommand("u").includes("AIC-User-Agent: omarchy-easel/1.0"))
+  assert.ok(Model.imageFetchCommand("/home/x", IMG, 843).includes("omarchy-easel/1.0"))
+  assert.ok(Model.curlJsonCommand(Model.searchUrl({ page: 1 })).includes("AIC-User-Agent: omarchy-easel/1.0"))
 })
 
 test("wall label reads like a wall label", () => {
@@ -120,10 +121,10 @@ test("dayHeading names the day on the local calendar", () => {
 })
 
 test("the catalogue's dominant colour rides along as HSL", () => {
-  const withColor = Model.normalizeArtwork({ id: 1, image_id: "img", color: { h: 39, s: 24, l: 59, population: 263 } })
+  const withColor = Model.normalizeArtwork({ id: 1, image_id: IMG, color: { h: 39, s: 24, l: 59, population: 263 } })
   assert.deepEqual(withColor.color, { h: 39, s: 24, l: 59 })
-  assert.equal(Model.normalizeArtwork({ id: 2, image_id: "img", color: null }).color, null)
-  assert.equal(Model.normalizeArtwork({ id: 3, image_id: "img" }).color, null)
+  assert.equal(Model.normalizeArtwork({ id: 2, image_id: IMG, color: null }).color, null)
+  assert.equal(Model.normalizeArtwork({ id: 3, image_id: IMG }).color, null)
   assert.ok(Model.FIELDS.includes("color"))
 })
 
@@ -185,11 +186,11 @@ test("the frame is chosen for the picture", () => {
 })
 
 test("the wall label ends with the accession number", () => {
-  const art = Model.normalizeArtwork({ id: 1, image_id: "img", main_reference_number: "1933.1007" })
+  const art = Model.normalizeArtwork({ id: 1, image_id: IMG, main_reference_number: "1933.1007" })
   assert.equal(art.reference, "1933.1007")
   const rows = Model.factRows(art)
   assert.deepEqual(rows[rows.length - 1], { label: "Ref.", value: "1933.1007" })
-  assert.ok(!Model.factRows(Model.normalizeArtwork({ id: 1, image_id: "img" })).some(r => r.label === "Ref."))
+  assert.ok(!Model.factRows(Model.normalizeArtwork({ id: 1, image_id: IMG })).some(r => r.label === "Ref."))
   assert.ok(Model.FIELDS.includes("main_reference_number"))
 })
 

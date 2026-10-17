@@ -89,15 +89,17 @@ omarchy-shell atsokolas.easel status
 ## Requirements
 
 - Omarchy Quattro (Quickshell plugin support)
-- `curl`
+- `curl` 8.4 or newer (it enforces the download caps)
 - `magick` (ImageMagick) for the in-my-theme render; without it the picture shows as painted
 - Network access to `api.artic.edu` and `www.artic.edu`
 
-Images are cached under `~/.cache/omarchy/easel/`, keyed by artwork and render width, so a day's picture is fetched once.
+Images are cached under `~/.cache/omarchy/easel/`, keyed by artwork and render width, so a day's picture is fetched once. The cache is private to you (`0700`) and is refused if it is ever a symlink.
 
 ## Data
 
 Artwork data and images come from the [Art Institute of Chicago API](https://api.artic.edu/docs/). Easel only ever asks for works the museum marks as public domain. The image service requires callers to identify themselves, so requests carry an `AIC-User-Agent` header and nothing else about you. Easel writes only its own theme directory and, when you change a setting, its own widget entry in `shell.json`.
+
+Nothing the museum sends is trusted. Image ids must be the museum's UUIDs before they name a file or a URL, and links must be its numeric artwork pages. Every download is capped while it streams: 1 MB for a search page (a real one is about 20 KB), 8 MB for the panel picture and 32 MB for the wallpaper (real ones top out near 350 KB and 2.5 MB). A picture is written to a temporary file, checked to be a JPEG of sensible size, and only then renamed into place. Titles, names, and every other catalogue string are shown as plain text, never as markup.
 
 ## Tests
 
@@ -105,7 +107,7 @@ Artwork data and images come from the [Art Institute of Chicago API](https://api
 ./tests/run
 ```
 
-Covers the parts that are pure: the daily draw, paging limits, the search URL, parsing, preference fallback, cache paths, the wall label, and the palette.
+Covers the parts that are pure: the daily draw, paging limits, the search URL, parsing, preference fallback, cache paths, the wall label, and the palette. The download commands run for real against a stand-in `curl`, to prove the caps, the JPEG check, the private cache, and that a planted symlink is never written through.
 
 ## Remove
 

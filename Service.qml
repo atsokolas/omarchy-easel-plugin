@@ -50,9 +50,7 @@ Item {
   property string _announcedKey: ""
   property string _searchOutput: ""
   property string _imagePending: ""
-  property string _imageUrlPending: ""
   property string _hangPending: ""
-  property string _hangUrlPending: ""
   property string _hangThemed: ""
   property string _themedPending: ""
 
@@ -109,8 +107,7 @@ Item {
       return
     }
     _imagePending = Model.cachePath(home, art.imageId, Model.DISPLAY_BOX)
-    _imageUrlPending = Model.imageUrl(art.imageId, Model.DISPLAY_BOX)
-    imageCheckProcess.command = Model.existsCommand(_imagePending)
+    imageCheckProcess.command = Model.cachedCommand(_imagePending, Model.DISPLAY_BOX)
     imageCheckProcess.running = true
   }
 
@@ -132,7 +129,7 @@ Item {
       return
     }
     _themedPending = Model.themedPath(plainPath, themeKey)
-    themedCheckProcess.command = Model.existsCommand(_themedPending)
+    themedCheckProcess.command = Model.cachedCommand(_themedPending, Model.DISPLAY_BOX)
     themedCheckProcess.running = true
   }
 
@@ -161,8 +158,7 @@ Item {
     hanging = true
     hangError = ""
     _hangPending = Model.cachePath(home, art.imageId, Model.WALLPAPER_BOX)
-    _hangUrlPending = Model.imageUrl(art.imageId, Model.WALLPAPER_BOX)
-    hangCheckProcess.command = Model.existsCommand(_hangPending)
+    hangCheckProcess.command = Model.cachedCommand(_hangPending, Model.WALLPAPER_BOX)
     hangCheckProcess.running = true
   }
 
@@ -253,7 +249,7 @@ Item {
         root.adoptImage()
         return
       }
-      imageFetchProcess.command = Model.curlImageCommand(root._imageUrlPending, root._imagePending, 45)
+      imageFetchProcess.command = Model.imageFetchCommand(root.home, root.art.imageId, Model.DISPLAY_BOX, 45)
       imageFetchProcess.running = true
     }
   }
@@ -278,7 +274,7 @@ Item {
         root.applyHang()
         return
       }
-      hangFetchProcess.command = Model.curlImageCommand(root._hangUrlPending, root._hangPending, 90)
+      hangFetchProcess.command = Model.imageFetchCommand(root.home, root.art.imageId, Model.WALLPAPER_BOX, 90)
       hangFetchProcess.running = true
     }
   }

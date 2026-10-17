@@ -20,6 +20,32 @@ var DISPLAY_BOX = 843
 var WALLPAPER_BOX = 2400
 var BATCH = 15
 
+// Hard ceilings on what the network may hand over, enforced while the bytes
+// arrive rather than after. A search page is about 20 KB; a picture fitted
+// to the panel box tops out near 350 KB and the wallpaper render near
+// 2.5 MB. Each cap sits well over ten times the largest seen, so no real
+// response comes near it and a runaway one stops early.
+var MAX_JSON_BYTES = 1048576
+var MAX_DISPLAY_BYTES = 8388608
+var MAX_WALLPAPER_BYTES = 33554432
+
+// The museum's image ids are lowercase UUIDs and its artwork ids are plain
+// integers. Anything else is refused before it reaches a path or a URL.
+var IMAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+var ARTWORK_ID = /^[0-9]{1,12}$/
+
+function isImageId(value) {
+  return typeof value === "string" && IMAGE_ID.test(value)
+}
+
+function isArtworkId(value) {
+  return ARTWORK_ID.test(String(value === null || value === undefined ? "" : value))
+}
+
+function maxImageBytes(box) {
+  return (parseInt(box, 10) || DISPLAY_BOX) > DISPLAY_BOX ? MAX_WALLPAPER_BYTES : MAX_DISPLAY_BYTES
+}
+
 // Two constraints shape the draw. The search endpoint refuses an offset
 // past 1000, and relevance falls off a cliff long before that — the deep
 // pages are near-duplicate print runs and Roman coins. Twenty pages keeps
@@ -121,23 +147,25 @@ function searchUrl(selection) {
 
 function imageUrl(imageId, box) {
   var id = String(imageId || "")
-  if (id === "") return ""
+  if (!isImageId(id)) return ""
   var b = Math.max(80, parseInt(box, 10) || DISPLAY_BOX)
   return IIIF_BASE + "/" + id + "/full/!" + b + "," + b + "/0/default.jpg"
 }
 
 function pageUrl(artworkId) {
-  var id = String(artworkId || "")
-  return id === "" ? SITE_BASE : SITE_BASE + "/" + id
+  var id = String(artworkId === null || artworkId === undefined ? "" : artworkId)
+  return isArtworkId(id) ? SITE_BASE + "/" + id : SITE_BASE
 }
 
 function cacheDir(home) {
   return String(home || "") + "/.cache/omarchy/easel"
 }
 
+// The filename is the validated id and the box, nothing else, so it can
+// only ever name a file directly inside the cache.
 function cachePath(home, imageId, box) {
   var id = String(imageId || "")
-  if (id === "") return ""
+  if (!isImageId(id) || String(home || "") === "") return ""
   var b = Math.max(80, parseInt(box, 10) || DISPLAY_BOX)
   return cacheDir(home) + "/" + id + "-" + b + ".jpg"
 }
@@ -155,11 +183,11 @@ function flatten(value) {
 function normalizeArtwork(row) {
   if (!row || typeof row !== "object") return null
   var imageId = text(row.image_id)
-  if (imageId === "") return null
+  if (!isImageId(imageId)) return null
   var thumb = row.thumbnail && typeof row.thumbnail === "object" ? row.thumbnail : {}
   var color = row.color && typeof row.color === "object" ? row.color : null
   return {
-    id: String(row.id || ""),
+    id: isArtworkId(row.id) ? String(row.id) : "",
     title: text(row.title) || "Untitled",
     artist: text(row.artist_title),
     artistDisplay: flatten(row.artist_display),
@@ -187,6 +215,7 @@ function normalizeArtwork(row) {
 function parseSearch(raw) {
   var body = text(raw)
   if (body === "") return { ok: false, error: "Empty response", items: [] }
+  if (String(raw).length > MAX_JSON_BYTES) return { ok: false, error: "The collection sent too much back", items: [] }
   var parsed
   try {
     parsed = JSON.parse(body)
@@ -221,31 +250,63 @@ function pickArtwork(items, selection) {
   return pool[Math.abs(Math.floor(pick)) % pool.length]
 }
 
+// curl enforces --max-filesize on the bytes as they arrive (since 8.4), so a
+// chunked or unsized body is cut off at the cap just like a declared one,
+// and the transfer fails rather than ending short.
 function curlJsonCommand(url, timeoutSec) {
   var timeout = String(Math.max(4, parseInt(timeoutSec, 10) || 20))
+  var target = String(url || "")
   return [
-    "curl", "-fsS", "--max-time", timeout,
+    "curl", "-fsS", "--proto", "=https", "--max-time", timeout,
+    "--max-filesize", String(MAX_JSON_BYTES),
     "-H", "AIC-User-Agent: " + API_AGENT,
     "-H", "Accept: application/json",
-    String(url || "")
+    target.indexOf(API_URL + "?") === 0 ? target : "https://invalid./"
   ]
 }
 
-function curlImageCommand(url, path, timeoutSec) {
+// Fetches one render of a picture into the cache. The cache is private and
+// may not be a symlink; the download goes to a fresh file made by mktemp
+// beside its destination, is capped while it streams, must be a JPEG of
+// sensible size, and only then is renamed into place — rename replaces
+// whatever sits at the name rather than writing through it. The wallpaper
+// render, which nothing downstream decodes at a bounded size, also has its
+// dimensions checked when `file` is around.
+function imageFetchCommand(home, imageId, box, timeoutSec) {
+  var b = Math.max(80, parseInt(box, 10) || DISPLAY_BOX)
   var timeout = String(Math.max(5, parseInt(timeoutSec, 10) || 45))
-  return [
-    "curl", "-fsS", "--max-time", timeout, "--create-dirs",
-    "-H", "AIC-User-Agent: " + API_AGENT,
-    "-o", String(path || ""),
-    String(url || "")
-  ]
+  var script =
+    'd=$1; out=$2; ' +
+    '[ -n "$out" ] && [ -n "$3" ] || exit 2; ' +
+    'case $out in "$d"/*/*) exit 2 ;; "$d"/*) ;; *) exit 2 ;; esac; ' +
+    '[ -L "$d" ] && exit 2; ' +
+    'mkdir -p "$d" && chmod 700 "$d" || exit 1; ' +
+    '[ -d "$d" ] && [ ! -L "$d" ] && [ -O "$d" ] || exit 2; ' +
+    'tmp=$(mktemp "$d/.fetch.XXXXXX") || exit 1; ' +
+    'trap \'rm -f "$tmp"\' EXIT; ' +
+    'curl -fsS --proto =https --max-time "$4" --max-filesize "$5" -H "AIC-User-Agent: $7" -o "$tmp" "$3" || exit 1; ' +
+    'n=$(wc -c < "$tmp"); [ "$n" -ge 100 ] && [ "$n" -le "$5" ] || exit 1; ' +
+    'case $(od -An -N3 -tx1 "$tmp") in *"ff d8 ff"*) ;; *) exit 1 ;; esac; ' +
+    'if [ "$6" -gt ' + (2 * DISPLAY_BOX) + ' ] && command -v file >/dev/null; then ' +
+    'wh=$(file -b "$tmp" | grep -o "[0-9]\\{1,6\\}x[0-9]\\{1,6\\}" | tail -n 1); ' +
+    'if [ -n "$wh" ]; then [ "${wh%x*}" -le "$6" ] && [ "${wh#*x}" -le "$6" ] || exit 1; fi; fi; ' +
+    'mv -fT "$tmp" "$out" || exit 1; trap - EXIT'
+  return ["sh", "-c", script, "sh", cacheDir(home), cachePath(home, imageId, b), imageUrl(imageId, b),
+    timeout, String(maxImageBytes(b)), String(b * 2), API_AGENT]
 }
 
-// curl writes a zero-byte file before it has anything to write, so a
-// truncated download leaves a valid-looking path behind. Re-fetch anything
-// too small to be a JPEG rather than handing the shell a broken image.
-function existsCommand(path) {
-  return ["test", "-s", String(path || "")]
+// Whether a cached render can be used as is: a regular file, not a link,
+// and of a size a real render could be. Anything else is removed so it is
+// fetched again. Only the fetch above and the theme render write here.
+function cachedCommand(path, box) {
+  var script =
+    '[ -n "$1" ] || exit 2; [ -L "$1" ] && { rm -f "$1"; exit 1; }; [ -f "$1" ] || exit 1; ' +
+    'n=$(wc -c < "$1"); [ "$n" -ge 100 ] && [ "$n" -le "$2" ] && exit 0; rm -f "$1"; exit 1'
+  return ["sh", "-c", script, "sh", String(path || ""), String(maxImageBytes(box))]
+}
+
+function wallpaperCommand(path) {
+  return ["omarchy-theme-bg-set", String(path || "")]
 }
 
 function openCommand(artworkId) {
@@ -353,6 +414,12 @@ function notificationText(value) {
   return v.charAt(0) === "-" ? "⁠" + v : v
 }
 
+// Notification bodies are markup by the spec, so the catalogue's own
+// ampersands and angle brackets are escaped and shown as written.
+function markupText(value) {
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
 function toastCommand(art) {
   if (!art) return null
   return [
@@ -361,7 +428,7 @@ function toastCommand(art) {
     "-g", "🖼️",
     "-u", "low",
     notificationText("Today's artwork"),
-    notificationText(caption(art))
+    markupText(notificationText(caption(art)))
   ]
 }
 
@@ -526,9 +593,17 @@ if (typeof module !== "undefined") {
     parseSearch: parseSearch,
     preferredItems: preferredItems,
     pickArtwork: pickArtwork,
+    MAX_JSON_BYTES: MAX_JSON_BYTES,
+    MAX_DISPLAY_BYTES: MAX_DISPLAY_BYTES,
+    MAX_WALLPAPER_BYTES: MAX_WALLPAPER_BYTES,
+    isImageId: isImageId,
+    isArtworkId: isArtworkId,
+    maxImageBytes: maxImageBytes,
     curlJsonCommand: curlJsonCommand,
-    curlImageCommand: curlImageCommand,
-    existsCommand: existsCommand,
+    imageFetchCommand: imageFetchCommand,
+    cachedCommand: cachedCommand,
+    wallpaperCommand: wallpaperCommand,
+    markupText: markupText,
     openCommand: openCommand,
     THEME_NAME: THEME_NAME,
     hsl: hsl,
@@ -536,6 +611,7 @@ if (typeof module !== "undefined") {
     colorsToml: colorsToml,
     themeDir: themeDir,
     hangCommand: hangCommand,
+    notificationText: notificationText,
     toastCommand: toastCommand,
     artistOf: artistOf,
     caption: caption,

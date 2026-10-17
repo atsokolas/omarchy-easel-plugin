@@ -162,6 +162,9 @@ Panel {
       onCloseRequested: root.handleClose()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) { root.handleTextKey(text) }
+      // The catcher spends `h` on moving left before any text key is seen, and
+      // Easel has nothing to move between, so the letter is taken back here.
+      Keys.onPressed: function(event) { if (event.text === "h" || event.text === "H") service.hang() }
 
       ColumnLayout {
         anchors.fill: parent
@@ -183,6 +186,7 @@ Panel {
             spacing: Style.space(2)
 
             Text {
+              textFormat: Text.PlainText
               text: Model.APP_NAME
               color: root.foreground
               font.family: root.fontFamily
@@ -193,6 +197,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               width: parent.width
               text: Model.dayHeading(service.dateKey)
               color: root.dim
@@ -250,6 +255,9 @@ Panel {
             anchors.margins: Style.space(12)
             source: service.imagePath === "" ? "" : "file://" + service.imagePath
             fillMode: Image.PreserveAspectFit
+            // The render is fitted to an 843px box; never decode past it.
+            sourceSize.width: Model.DISPLAY_BOX
+            sourceSize.height: Model.DISPLAY_BOX
             asynchronous: true
             cache: true
             smooth: true
@@ -263,6 +271,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             width: parent.width - Style.space(40)
             visible: plate.opacity < 0.05
@@ -282,6 +291,7 @@ Panel {
           visible: root.art !== null
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             text: root.art ? root.art.title : ""
             color: root.foreground
@@ -294,6 +304,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             width: parent.width
             text: Model.subtitle(root.art)
             color: root.dim
@@ -330,6 +341,7 @@ Panel {
                 spacing: Style.space(8)
 
                 Text {
+                  textFormat: Text.PlainText
                   width: Style.space(58)
                   text: modelData.label
                   color: root.dim
@@ -338,6 +350,7 @@ Panel {
                 }
 
                 Text {
+                  textFormat: Text.PlainText
                   width: Math.max(0, parent.width - Style.space(58) - Style.space(8))
                   text: modelData.value
                   color: root.foreground
@@ -424,6 +437,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: service.hangError !== ""
             ? service.hangError

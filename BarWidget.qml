@@ -220,6 +220,7 @@ BarWidget {
 
       Text {
         id: label
+        textFormat: Text.PlainText
         visible: root.showTitle && !root.vertical && root.art !== null
         x: frame.x + content.frameWidth + content.gap
         width: content.labelWidth
